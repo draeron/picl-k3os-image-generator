@@ -1,0 +1,23 @@
+version: '3'
+
+services:
+  picl:
+    build:
+      context: .
+
+    environment: 
+      K3OS_VERSION: v0.20.4-k3s1r0
+      RASPBERRY_PI_FIRMWARE : 1.20210303
+
+    command: raspberrypi
+
+    privileged: true
+
+    volumes:
+    - /dev:/dev
+    - cache:/deps
+    - ./config:/config
+    - ./images:/images
+
+volumes:
+  cache: 

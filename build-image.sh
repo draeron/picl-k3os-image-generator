@@ -10,8 +10,8 @@ DEFAULT_GOOD_PI_VERSION="1.20200811"
 DEFAULT_GOOD_K3OS_VERSION="v0.11.0"
 
 ## Check if we have any configs
-if [ -z "$(ls config/*.yaml)" ]; then
-	echo "There are no .yaml files in config/, please create them." >&2
+if [ -z "$(ls /config/*.yaml)" ]; then
+	echo "There are no .yaml files in /config, please create them." >&2
 	echo "Their name must be the MAC address of eth0, e.g.:" >&2
 	echo "  config/dc:a6:32:aa:bb:cc.yaml" >&2
 	exit 1
@@ -102,12 +102,12 @@ fi
 echo "== Checking or downloading dependencies... =="
 
 function dl_dep() {
-	if [ ! -f "deps/$1" ]; then
-		wget -O deps/$1 $2
+	if [ ! -f "/deps/$1" ]; then
+		wget -O /deps/$1 $2
 	fi
 }
 
-mkdir -p deps
+mkdir -p /deps
 
 if [ "$IMAGE_TYPE" = "raspberrypi" ]; then
 	get_pifirmware
@@ -118,8 +118,8 @@ elif [ "$IMAGE_TYPE" = "orangepipc2" ]; then
 	dl_dep linux-dtb-dev-sunxi64.deb https://apt.armbian.com/pool/main/l/linux-5.4.2-sunxi64/linux-dtb-dev-sunxi64_19.11.3.348_arm64.deb
 	dl_dep linux-image-dev-sunxi64.deb https://apt.armbian.com/pool/main/l/linux-5.4.2-sunxi64/linux-image-dev-sunxi64_19.11.3.348_arm64.deb
 
-	if [ ! -f "deps/armbian_orangepipc2.img" ]; then
-		pushd deps
+	if [ ! -f "/deps/armbian_orangepipc2.img" ]; then
+		pushd /deps
 		wget -O Armbian_orangepipc2_buster_current.7z https://dl.armbian.com/orangepipc2/archive/Armbian_19.11.3_Orangepipc2_buster_current_5.3.9.7z
 		7z x Armbian_orangepipc2_buster_current.7z \*.img
 		dd of=armbian_orangepipc2.img bs=1024 count=4096 < Armbian_*_Orangepipc2_buster_current_*.img
@@ -130,10 +130,10 @@ fi
 
 if [ -z "${K3OS_VERSION}" ]; then
     echo "K3OS_VERSION env variable was not set - defaulting to known version [${DEFAULT_GOOD_K3OS_VERSION}]"
-    dl_dep k3os-rootfs-arm64.tar.gz https://github.com/rancher/k3os/releases/download/${DEFAULT_GOOD_K3OS_VERSION}/k3os-rootfs-arm64.tar.gz
+    dl_dep k3os-rootfs-${K3OS_VERSION}-arm64.tar.gz https://github.com/rancher/k3os/releases/download/${DEFAULT_GOOD_K3OS_VERSION}/k3os-rootfs-arm64.tar.gz
 else
     echo "K3OS_VERSION env variable set to ${K3OS_VERSION}"
-    dl_dep k3os-rootfs-arm64.tar.gz https://github.com/rancher/k3os/releases/download/${K3OS_VERSION}/k3os-rootfs-arm64.tar.gz
+    dl_dep k3os-rootfs-${K3OS_VERSION}-arm64.tar.gz https://github.com/rancher/k3os/releases/download/${K3OS_VERSION}/k3os-rootfs-arm64.tar.gz
 fi
 
 # To find the URL for these packages:
@@ -185,7 +185,7 @@ elif [ "$IMAGE_TYPE" = "orangepipc2" ]; then
 	parted -s $IMAGE unit s mkpart primary 8192 100%
 
 	# copy everything before the first partition, except the partition table
-	dd if=deps/armbian_orangepipc2.img of=$IMAGE bs=512 skip=1 seek=1 count=8191 conv=notrunc
+	dd if=/deps/armbian_orangepipc2.img of=$IMAGE bs=512 skip=1 seek=1 count=8191 conv=notrunc
 fi
 
 LODEV=`sudo losetup --show -f $IMAGE`
@@ -221,7 +221,7 @@ sudo mknod -m 0666 root/dev/null c 1 3
 echo "== Initializing boot... =="
 if [ "$IMAGE_TYPE" = "raspberrypi" ]; then
 	PITEMP="$(mktemp -d)"
-	sudo tar -xf deps/raspberrypi-firmware.tar.gz --strip 1 -C $PITEMP
+	sudo tar -xf /deps/raspberrypi-firmware.tar.gz --strip 1 -C $PITEMP
 
 	mkdir boot
 	sudo mount $LODEV_BOOT boot
@@ -253,16 +253,16 @@ fi
 
 ## Install k3os, busybox and resize dependencies
 echo "== Installing... =="
-sudo tar -xf deps/k3os-rootfs-arm64.tar.gz --strip 1 -C root
+sudo tar -xf /deps/k3os-rootfs-${K3OS_VERSION}-arm64.tar.gz --strip 1 -C root
 # config.yaml will be created by init.resizefs based on MAC of eth0
-sudo cp -R config root/k3os/system
+sudo cp -R /config root/k3os/system
 for filename in root/k3os/system/config/*.*; do [ "$filename" != "${filename,,}" ] && sudo mv "$filename" "${filename,,}" ; done 
 K3OS_VERSION=$(ls --indicator-style=none root/k3os/system/k3os | grep -v current | head -n1)
 
 ## Install busybox
 unpack_deb() {
-	ar x deps/$1
-	sudo tar -xf data.tar.[gx]z -C $2
+	ar x /deps/$1
+	sudo tar -xf data.tar.[gx]z -C $2 -m
 	rm -f data.tar.gz data.tar.xz control.tar.gz control.tar.xz debian-binary
 }
 
@@ -315,7 +315,7 @@ if [ "$IMAGE_TYPE" = "orangepipc2" ]; then
 	sudo ln -s $(cd root/boot; ls -d vmlinuz-*-sunxi64 | head -n1) root/boot/Image
 elif [ "$IMAGE_TYPE" = "raspberrypi" ]; then
   BRCMTMP=$(mktemp -d)
-  7z e -y deps/rpi-firmware-nonfree-master.zip -o"$BRCMTMP" "firmware-nonfree-master/brcm/*" > /dev/null
+  7z e -y /deps/rpi-firmware-nonfree-master.zip -o"$BRCMTMP" "firmware-nonfree-master/brcm/*" > /dev/null
   sudo mkdir -p root/lib/firmware/brcm/
   sudo cp "$BRCMTMP"/brcmfmac43455* root/lib/firmware/brcm/
   sudo cp "$BRCMTMP"/brcmfmac43430* root/lib/firmware/brcm/
@@ -361,7 +361,7 @@ sync
 sleep 1
 sudo losetup -d $LODEV
 
-IMAGE_FINAL=picl-k3os-${K3OS_VERSION}-${IMAGE_TYPE}.img
+IMAGE_FINAL=/images/picl-k3os-${K3OS_VERSION}-${IMAGE_TYPE}.img
 mv $IMAGE $IMAGE_FINAL
 echo ""
 echo "== $IMAGE_FINAL created. =="
